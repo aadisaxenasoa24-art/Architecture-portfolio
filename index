@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture Portfolio Generator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+
+    <h1>Architecture Portfolio Generator</h1>
+
+    <div class="form">
+        <input id="title" placeholder="Project Title">
+
+        <input id="location" placeholder="Location">
+
+        <input id="year" placeholder="Year">
+
+        <input id="image" placeholder="Image URL">
+
+        <textarea id="description" placeholder="Project Description"></textarea>
+
+        <button onclick="addProject()">Add Project</button>
+    </div>
+
+    <hr>
+
+    <div id="portfolio" class="portfolio"></div>
+
+</div>
+
+<script src="script.js"></script>
+
+</body>
+</html>
