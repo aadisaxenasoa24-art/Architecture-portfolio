@@ -15,7 +15,12 @@ A cut-ready contour model of the SHREYAS site (Ahmedabad), built from
 | **Total cut path** | 90.2 m |
 | **Validation** | 0 errors, 0 warnings — see `docs/verification.md` |
 
-![model](docs/preview_model.png)
+![model](docs/preview_3d.png)
+
+**Spin it:** `docs/model-viewer.html` is a self-contained WebGL viewer — orbit the
+model, switch between the terrain surface and the as-built 2 mm board stack, turn
+the contours and roof boxes on and off, and push the vertical scale past true to
+read the landform. Everything in it is decoded from the delivered STL and DXF.
 
 ---
 
@@ -123,8 +128,12 @@ pip install ezdxf numpy scipy shapely matplotlib pymupdf pillow
 python3 build.py --rebuild-dem        # ~5 min, DEM solve dominates
 ```
 
-`build.py` runs the whole chain and finishes by reading its own DXF output back
-off disk and validating it. It exits non-zero if anything fails.
+`build.py` runs the whole chain and finishes by reading its own DXF and STL output
+back off disk and validating it. It exits non-zero if anything fails.
+
+```bash
+python3 make_previews_3d.py                # ~4 min, the 3-D views in docs/
+```
 
 | module | job |
 |---|---|
@@ -140,7 +149,9 @@ off disk and validating it. It exits non-zero if anything fails.
 | `stickfont.py` | single-stroke engraving font |
 | `validate.py` | independent check of the emitted cutting sheets |
 | `validate_3d.py` | independent check of the master 3-D DXF and STL |
-| `preview.py` | the images in `docs/` |
+| `render3d.py` | z-buffer renderer that reads the delivered STL/DXF back |
+| `preview.py` | the sheet and plan images in `docs/` |
+| `make_previews_3d.py` | the 3-D views, and the payload the viewer embeds |
 
 The DWG was read with LibreDWG (`dwg2dxf-converter`); the converted DXF is kept
 in `source/` for reference, but the pipeline reads the PDF, which is the only
