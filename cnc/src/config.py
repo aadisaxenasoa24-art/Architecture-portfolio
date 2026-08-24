@@ -38,6 +38,11 @@ BASE_LEVEL = 43            # datum of the base board, one interval below LEVEL_M
 #   1.0 m / 500 = 2.0 mm
 BOARD_MM = CONTOUR_INTERVAL_M * 1000.0 / SCALE     # = 2.0
 
+# Nominal building height for the 3-D blocks.  The source drawing carries no
+# storey heights - this is a stated assumption, not data, and the Rhino layer is
+# named after it so it cannot be mistaken for surveyed information.
+BUILDING_H_NOMINAL_M = 9.0
+
 # --- DEM -------------------------------------------------------------------
 DEM_CELL_M   = 0.25        # 0.5 mm at 1:500
 DEM_MARGIN_M = 40.0        # solve on a larger domain, then crop, to kill edge effects

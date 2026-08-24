@@ -68,8 +68,8 @@ def label(arr, title, sub):
     return np.array(im)
 
 
-def pack_viewer_data(out_dir):
-    """Payload for docs/model-viewer.html - height grid + line sets, base64 int16."""
+def pack_viewer_data(out_dir, dowels=None, sockets=None):
+    """Payload for docs/model-viewer.html - height grid, line sets, registration."""
     tris = R.read_stl(os.path.join(out_dir, "MASTER_TERRAIN_1to500.stl"))
     V = tris.reshape(-1, 3)
     base = config.BASE_LEVEL * 1000.0 / config.SCALE
@@ -98,11 +98,33 @@ def pack_viewer_data(out_dir):
         return (b64(np.concatenate(X)), b64(np.concatenate(Y)),
                 b64(np.concatenate(Z)), b64(np.array(off, dtype=np.int32)))
 
+    import assembly as _asm
+    if dowels is None or sockets is None:
+        import pickle as _p
+        _c = os.path.join(os.path.dirname(out_dir), ".cache", "assembly.pkl")
+        _d = _p.load(open(_c, "rb"))
+        dowels, sockets = _d["dowels"], _d["sockets"]
+
     cont = [a for L in sorted(M["contours"]) for a in M["contours"][L]]
     cx, cy, cz, coff = lines(cont)
     bx, by, bz, boff = lines(M["boxes"])
     wx, wy, wz, woff = lines(M["water"])
+    sock_rings = []
+    for L, v in sorted(sockets.items()):
+        for s_ in v:
+            r = np.asarray(s_["poly"].exterior.coords)
+            z = (L + 1) * 1000.0 / config.SCALE
+            sock_rings.append(np.column_stack([r[:, 0], r[:, 1], np.full(len(r), z)]))
+    sx, sy, sz, soff = lines(sock_rings)
+
+    rod = np.array([[d["x"], d["y"], base,
+                     (d["top_level"] + 1) * 1000.0 / config.SCALE] for d in dowels],
+                   dtype=np.float64) if dowels else np.zeros((0, 4))
     return {
+        "rodDia": _asm.ROD_DIA, "holeDia": _asm.HOLE_DIA,
+        "rods": b64(np.round(rod * 100).astype(np.int32)),
+        "nRods": len(rod),
+        "sx": sx, "sy": sy, "sz": sz, "soff": soff,
         "w": config.MODEL_W_M * 1000 / config.SCALE,
         "h": config.MODEL_H_M * 1000 / config.SCALE,
         "base": base, "levelMin": config.LEVEL_MIN, "levelMax": config.LEVEL_MAX,

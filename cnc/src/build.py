@@ -23,6 +23,9 @@ import nest as nesting
 import emit_sheets
 import emit_boxes
 import preview
+import assembly
+import emit_3dm
+import validate_3dm
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEF_PDF = os.path.join(HERE, "..", "source", config.PDF_SRC)
@@ -83,7 +86,14 @@ def main():
     for kind, v in B.items():
         print(f"  {kind:9s}: {len(v):4d}")
 
-    step("6  master 3-D files")
+    step("6  registration dowels and building sockets")
+    dowels = assembly.plan_dowels(P)
+    _rows, unpinned = assembly.check_dowels(dowels, P)
+    sockets = assembly.plan_sockets(P, B, dowels)
+    if unpinned:
+        print("   NOTE: pieces above rely on their engraved outline alone")
+
+    step("7  master 3-D files")
     for scale, tag in ((1, "1to1"), (config.SCALE, "1to500")):
         p = emit3d.write_master_dxf(os.path.join(a.out, f"MASTER_3D_{tag}.dxf"),
                                     P, B, Z, scale=scale)
@@ -93,11 +103,20 @@ def main():
         print(f"  {os.path.basename(p):32s} {os.path.getsize(p)/1e6:6.2f} MB "
               f"({len(tris):,} triangles)")
 
-    step("7  nest the cutting sheets on 4 ft x 4 ft board")
+    step("8  Rhino assembly")
+    p, counts = emit_3dm.write_assembly(
+        os.path.join(a.out, "MASTER_ASSEMBLY_1to500.3dm"), P, B, dowels, sockets, Z)
+    print(f"  {os.path.basename(p):32s} {os.path.getsize(p)/1e6:6.2f} MB")
+    p = emit_3dm.write_reference_1to1(
+        os.path.join(a.out, "MASTER_3D_1to1.3dm"), P, B, Z)
+    print(f"  {os.path.basename(p):32s} {os.path.getsize(p)/1e6:6.2f} MB")
+
+    step("9  nest the cutting sheets on 4 ft x 4 ft board")
     extra = {"SITE_BOUNDARY": [config.pt_to_ground(s) for p in paths
                                if p["layer"] == "b_COLUMN" and p["rgb"] == (0, 0, 255)
                                for s in p["subs"] if len(s) >= 2]}
-    parts = [nesting.base_part(P, B)] + nesting.make_parts(P, B, extra)
+    parts = ([nesting.base_part(P, B, dowels=dowels)]
+             + nesting.make_parts(P, B, extra, dowels=dowels, sockets=sockets))
     sheets = nesting.nest(parts, verbose=False)
     used = sum(it["part"]["poly"].area for sh in sheets for it in sh["items"])
     print(f"  {len(parts)} parts -> {len(sheets)} sheets, "
@@ -116,25 +135,31 @@ def main():
 
     pickle.dump({"parts": parts, "sheets": sheets, "dropped": dropped},
                 open(os.path.join(a.cache, "nest.pkl"), "wb"))
+    pickle.dump({"dowels": dowels, "sockets": sockets},
+                open(os.path.join(a.cache, "assembly.pkl"), "wb"))
     pickle.dump(B, open(os.path.join(a.cache, "boxes.pkl"), "wb"))
     pickle.dump(P, open(os.path.join(a.cache, "profiles.pkl"), "wb"))
 
-    step("8  validate the emitted sheets")
+    step("10  validate everything that was written")
     import glob
     import validate
     import validate_3d
     rep = validate.check(glob.glob(os.path.join(sd, "*.dxf")), verbose=False)
     master_errors = validate_3d.check_all(a.out)
-    rep["errors"] += master_errors
+    asm_errors, asm_warn = validate_3dm.check(
+        os.path.join(a.out, "MASTER_ASSEMBLY_1to500.3dm"), dowels, P, sockets, verbose=False)
+    rep["errors"] += master_errors + asm_errors
+    rep["warnings"] += asm_warn
     print(f"  {len(sheets)} cutting sheets: errors {len(rep['errors']) - len(master_errors)}, "
           f"warnings {len(rep['warnings'])}")
     print(f"  master 3-D files: errors {len(master_errors)}")
+    print(f"  Rhino assembly:   errors {len(asm_errors)}, warnings {len(asm_warn)}")
     for e in rep["errors"]:
         print("   ERROR:", e)
     for w in rep["warnings"]:
         print("   WARN :", w)
 
-    step("9  roof out-to-out boxes as a standalone deliverable")
+    step("11  roof out-to-out boxes as a standalone deliverable")
     rows = emit_boxes.all_boxes(paths)
     for scale, tag in ((1, "1to1"), (config.SCALE, "1to500")):
         p = emit_boxes.write_dxf(os.path.join(a.out, f"BUILDING_OUT_TO_OUT_{tag}.dxf"),
@@ -144,7 +169,7 @@ def main():
     print(f"  {len(rows)} buildings scheduled "
           f"({sum(1 for r in rows if r['in_window'])} inside the model window)")
 
-    step("10  preview images")
+    step("12  preview images")
     docs = os.path.join(HERE, "..", "docs")
     os.makedirs(docs, exist_ok=True)
     preview.sheet_contact(sd, os.path.join(docs, "preview_sheets.png"))
@@ -155,6 +180,18 @@ def main():
     preview.model_preview(Z, B, os.path.join(docs, "preview_model.png"))
     preview.iso_preview(Z, os.path.join(docs, "preview_iso.png"))
     print("  5 images ->", os.path.abspath(docs))
+
+    with open(os.path.join(a.out, "DOWEL_SCHEDULE.csv"), "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["dowel_id", "x_mm_model", "y_mm_model", "top_board_level_m",
+                    "boards_pierced", "rod_length_mm", "hole_dia_mm", "rod_dia_mm"])
+        for d in dowels:
+            zt = (d["top_level"] + 1) * 1000.0 / config.SCALE
+            zb = config.BASE_LEVEL * 1000.0 / config.SCALE
+            w.writerow([d["id"], round(d["x"], 2), round(d["y"], 2), d["top_level"],
+                        len(d["levels"]), round(zt - zb, 1),
+                        assembly.HOLE_DIA, assembly.ROD_DIA])
+    print(f"  DOWEL_SCHEDULE.csv  {len(dowels)} rods")
 
     print(f"\ndone in {time.time()-t0:.0f}s -> {os.path.abspath(a.out)}")
     return 0 if not rep["errors"] else 1

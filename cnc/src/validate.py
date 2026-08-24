@@ -47,7 +47,9 @@ def check(paths, gap=5.0, margin=6.0, tools=(2.0, 3.0), verbose=True):
         name = os.path.basename(path)
         lay = read_sheet(path)
         outer = lay.get("CUT_OUTER", [])
-        inner = lay.get("CUT_INNER", [])
+        inner = (lay.get("CUT_INNER", [])
+                 + [r for k, v2 in lay.items() if k.startswith("CUT_DOWEL") for r in v2]
+                 + lay.get("CUT_SOCKET_BLDG", []))
         row = {"sheet": name, "outer": len(outer), "inner": len(inner)}
 
         for pts, closed in outer + inner:

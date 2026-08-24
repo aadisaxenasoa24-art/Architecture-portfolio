@@ -7,7 +7,7 @@ carries an engraved copy of the outline of the layer that sits on top of it, so
 the stack self-registers with no measuring.
 """
 import numpy as np
-from shapely.geometry import Polygon, MultiPolygon, LineString
+from shapely.geometry import Point, Polygon, MultiPolygon, LineString
 from shapely.ops import unary_union
 
 import config
@@ -33,8 +33,9 @@ def to_model_mm(geom_ground):
     return affinity.scale(geom_ground, 1.0 / SCALE, 1.0 / SCALE, origin=(0, 0))
 
 
-def make_parts(profiles, boxes, extra_lines=None):
-    """One part per island, with everything that gets engraved on it."""
+def make_parts(profiles, boxes, extra_lines=None, dowels=(), sockets=None):
+    """One part per island, with everything that gets cut or engraved on it."""
+    sockets = sockets or {}
     level_union = {}
     for L, isls in profiles.items():
         polys = [_poly(i) for i in isls]
@@ -77,10 +78,20 @@ def make_parts(profiles, boxes, extra_lines=None):
                     engrave_extra.extend((kind, np.asarray(c.coords))
                                          for c in _lines(cut))
 
+            cut_dowels, cut_sockets = [], []
+            for d in dowels:
+                if L in d["levels"] and p.contains(Point(d["x"], d["y"])):
+                    cut_dowels.append(d)
+            for s in sockets.get(L, ()):
+                if p.contains(s["poly"]):
+                    cut_sockets.append(np.asarray(s["poly"].exterior.coords))
+
             parts.append({
                 "id": f"L{L}-{letters[n] if n < 26 else str(n)}",
                 "level": L,
                 "poly": p,
+                "cut_dowels": cut_dowels,
+                "cut_sockets": cut_sockets,
                 "engrave_next": engrave_next,
                 "engrave_box": engrave_box,
                 "engrave_foot": engrave_foot,
@@ -109,7 +120,7 @@ def _lines(g):
     return [q for q in geoms if isinstance(q, LineString) and not q.is_empty]
 
 
-def base_part(profiles, boxes, extra_lines=None):
+def base_part(profiles, boxes, extra_lines=None, dowels=()):
     """The base board: the whole model rectangle at the base datum."""
     W = config.MODEL_W_M * 1000.0 / SCALE
     H = config.MODEL_H_M * 1000.0 / SCALE
@@ -121,6 +132,8 @@ def base_part(profiles, boxes, extra_lines=None):
         "id": f"L{config.BASE_LEVEL}-BASE",
         "level": config.BASE_LEVEL,
         "poly": p,
+        "cut_dowels": list(dowels),
+        "cut_sockets": [],
         "engrave_next": _rings(above_m),
         "engrave_box": [], "engrave_foot": [], "engrave_extra": [],
     }

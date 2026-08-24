@@ -181,3 +181,55 @@ inside exactly one profile, and profiles below tool size.
 17 sheets   0 errors   0 warnings
 minimum clearance between parts on a sheet: 10.1 mm (target 5 mm)
 ```
+
+---
+
+## 7. Registration and sockets
+
+**Why the dowel runs are provably right.** A contour stack is nested: the region
+at or above level *L* is a subset of the region at or above *L−1*. So a point
+that sits inside a board with clearance *c* sits inside every board beneath it
+with clearance at least *c*. Placement therefore only has to be checked at the
+top of a run, and dowels are chosen top-down so a rod placed for a summit board
+is reused free by everything below it.
+
+```
+28 dowels, 3.0 mm rod in 3.2 mm holes, 4.0 mm of material minimum at any edge
+holes per board: 2 to 28        430 holes in total
+46 cut pieces: 43 pinned, 3 too small to take a dowel
+```
+
+The three unpinned pieces are slivers of 72, 149 and 91 m² of ground (289, 596
+and 365 mm² on the model). They are located by the outline engraved on the board
+below them.
+
+**Sockets.** A building socket is cut only where the whole out-to-out box sits
+inside one visible terrace with 3 mm clearance and clear of every dowel by 3 mm.
+41 of 293 boxes qualify; the rest straddle a terrace edge, where a socket would
+be ambiguous, and stay engrave-only.
+
+## 8. The Rhino assembly, checked
+
+`src/validate_3dm.py` reopens `MASTER_ASSEMBLY_1to500.3dm` and checks it against
+the plan — not against the writer's own variables:
+
+- every Extrusion reports `IsSolid`
+- every board is exactly 2.000 mm thick and sits at its own elevation
+- **every one of the 430 dowel holes is present, in the right board of the run,
+  at 3.2 mm** (a hole missing from any board in a run is an error)
+- all 41 sockets are cut in the board the plan assigns them to
+- each of the 28 rods is 3.0 mm, fits its 3.2 mm hole, and spans the base board
+  to the top face of its top board
+- nothing lies outside the 1200 × 1080 mm footprint
+
+```
+711 objects on 34 layers, units Millimeters
+47 board solids   28 rods   293 blocks
+every extrusion closed: True
+bounding box  X 0.0..1200.0   Y 0.0..1080.0   Z 86.0..154.0 mm
+ERRORS 0   WARNINGS 0
+```
+
+The assembly views in `docs/` are tessellated from the .3dm itself — outer
+profile, hole profiles and path — so a feature missing from the file would be
+missing from the picture.
